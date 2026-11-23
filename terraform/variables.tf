@@ -20,3 +20,9 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+variable "public_key" {
+  description = "SSH public key for the Drupal EC2 instances"
+  type        = string
+  default     = ""
+}
