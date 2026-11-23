@@ -1,0 +1,124 @@
+
+---
+- name: Configure Drupal application servers
+  hosts: drupal_servers
+  become: true
+  vars_files:
+    - vault.yml
+
+  tasks:
+    - name: Update Ubuntu package cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install Apache, PHP and Drupal dependencies
+      ansible.builtin.apt:
+        name:
+          - apache2
+          - php
+          - php-cli
+          - php-common
+          - php-mysql
+          - php-xml
+          - php-gd
+          - php-curl
+          - php-mbstring
+          - php-zip
+          - php-intl
+          - php-apcu
+          - composer
+          - git
+          - unzip
+        state: present
+
+    - name: Enable Apache rewrite module
+      community.general.apache2_module:
+        name: rewrite
+        state: present
+      notify: Restart Apache
+
+    - name: Create Drupal project using Composer
+      ansible.builtin.command:
+        cmd: composer create-project drupal/recommended-project:^11 /var/www/drupal --no-interaction
+        creates: /var/www/drupal/web/index.php
+
+    - name: Set Drupal directory ownership
+      ansible.builtin.file:
+        path: /var/www/drupal
+        owner: www-data
+        group: www-data
+        recurse: true
+
+    - name: Create Drupal files directory
+      ansible.builtin.file:
+        path: /var/www/drupal/web/sites/default/files
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Configure Drupal database connection
+      ansible.builtin.copy:
+        dest: /var/www/drupal/web/sites/default/settings.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+        content: |
+          <?php
+          $databases['default']['default'] = [
+            'database' => '{{ db_name }}',
+            'username' => '{{ db_user }}',
+            'password' => '{{ db_password }}',
+            'host' => '{{ db_host }}',
+            'port' => '{{ 3306 }}',
+            'driver' => 'mysql',
+            'prefix' => '',
+            'namespace' => 'Drupal\\mysql\\Driver\\Database\\mysql',
+            'autoload' => 'core/modules/mysql/src/Driver/Database/mysql/',
+          ];
+          $settings['hash_salt'] = '';
+
+    - name: Configure Apache virtual host
+      ansible.builtin.copy:
+        dest: /etc/apache2/sites-available/drupal.conf
+        content: |
+          <VirtualHost *:80>
+              ServerName localhost
+              DocumentRoot /var/www/drupal/web
+
+              <Directory /var/www/drupal/web>
+                  AllowOverride All
+                  Require all granted
+              </Directory>
+
+              ErrorLog ${APACHE_LOG_DIR}/drupal-error.log
+              CustomLog ${APACHE_LOG_DIR}/drupal-access.log combined
+          </VirtualHost>
+      notify: Restart Apache
+
+    - name: Disable default Apache site
+      ansible.builtin.command:
+        cmd: a2dissite 000-default.conf
+      args:
+        creates: /etc/apache2/sites-enabled/000-default.conf.disabled
+      notify: Restart Apache
+
+    - name: Enable Drupal Apache site
+      ansible.builtin.command:
+        cmd: a2ensite drupal.conf
+      args:
+        creates: /etc/apache2/sites-enabled/drupal.conf
+      notify: Restart Apache
+
+    - name: Ensure Apache is enabled and running
+      ansible.builtin.service:
+        name: apache2
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Restart Apache
+      ansible.builtin.service:
+        name: apache2
+        state: restarted

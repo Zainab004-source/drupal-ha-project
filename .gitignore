@@ -1,0 +1,22 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+
+# Ansible secrets and environment-specific inventory
+ansible/vault.yml
+ansible/inventory.ini
+*.retry
+
+# SSH private keys
+*.pem
+*.key
+id_rsa
+id_ed25519
+
+# Local files
+.DS_Store
