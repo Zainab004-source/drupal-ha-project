@@ -70,6 +70,11 @@ resource "aws_lb_target_group" "drupal_tg" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.drupal_vpc.id
+  stickiness {
+    enabled         = true
+    type            = "lb_cookie"
+    cookie_duration = 3600
+  }
 
   health_check {
     path                = "/"
